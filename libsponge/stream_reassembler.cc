@@ -92,7 +92,7 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
             break;
     }
 
-       if(resIndex <= _firstUnassembled){
+    if(resIndex <= _firstUnassembled){
         size_t written_size = _output.write(string(resData.begin() + _firstUnassembled - resIndex, resData.end()));
         _firstUnassembled += written_size;
     } else {
