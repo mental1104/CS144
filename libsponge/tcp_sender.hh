@@ -15,6 +15,78 @@
 //! segments, keeps track of which segments are still in-flight,
 //! maintains the Retransmission Timer, and retransmits in-flight
 //! segments if the retransmission timer expires.
+
+class TCPTimer {
+  private:
+    bool _time_running;
+    unsigned int _rto;
+    unsigned int _init_time;
+    unsigned int _time_passed;
+    unsigned int _retransmission;
+
+  public:
+    TCPTimer(const size_t rto = TCPConfig::TIMEOUT_DFLT,
+             const size_t init_time = TCPConfig::TIMEOUT_DFLT)
+    : _time_running(false), _rto(rto), _init_time(init_time), _time_passed(0),
+      _retransmission(0){};
+
+    unsigned int retransmission() const { return _retransmission; }
+
+    bool timer() {
+        printf("_time_running:%d\n", _time_running);
+        return _time_running;
+    }
+
+    void runing() { _time_running = true; }
+
+    void close() {
+        printf("timer closing\n");
+        _time_running = false;
+        _retransmission = 0;
+    }
+
+    unsigned int rtoValue() { return _rto; }
+
+    void start() {
+        printf("timer start\n");
+        _time_running = true;
+        _rto = _init_time;
+        _time_passed = 0;
+        _retransmission = 0;
+    }
+
+    void double_rto_restart(const size_t window) {
+        printf("double_rto_restart-----------_time_running:%d\n", _time_running);
+
+        if (_time_running == false)
+          return;
+
+        printf("window:%ld\n", window);
+
+        if (window != 0)
+            _rto *= 2;
+
+        _time_passed = 0;
+        _retransmission++;
+    }
+
+    bool rto(const size_t ms_since_last_tick) {
+        //进入判断是否超时的阶段
+        printf("time_running:%d\n", timer());
+
+        if (_time_running == false)
+            return false;
+
+        _time_passed += ms_since_last_tick;
+
+        printf("time:passed:%d\n", _time_passed);
+
+        if (_time_passed >= _rto)
+            return true;
+        return false;
+    }
+};
+
 class TCPSender {
   private:
     //! our initial sequence number, the number for our SYN.
@@ -29,8 +101,17 @@ class TCPSender {
     //! outgoing stream of bytes that have not yet been sent
     ByteStream _stream;
 
+    TCPTimer tcptimer;
+
     //! the (absolute) sequence number for the next byte to be sent
     uint64_t _next_seqno{0};
+
+    size_t _window_size{1};
+    bool _flag_fin{false};
+
+    // 标记收到的outstanding_tcp
+    std::deque<TCPSegment> _outstanding_segment{};
+    std::optional<WrappingInt32> _ackno{};
 
   public:
     //! Initialize a TCPSender
@@ -52,6 +133,8 @@ class TCPSender {
 
     //! \brief Generate an empty-payload segment (useful for creating empty ACK segments)
     void send_empty_segment();
+
+    void send_noempty_segment(size_t remain);
 
     //! \brief create and send segments to fill as much of the window as possible
     void fill_window();
@@ -87,6 +170,12 @@ class TCPSender {
     //! \brief relative seqno for the next byte to be sent
     WrappingInt32 next_seqno() const { return wrap(_next_seqno, _isn); }
     //!@}
+
+    size_t remain() {
+        size_t ack_absolute_seqno = unwrap(_ackno.value(), _isn, _next_seqno);
+        return _next_seqno - ack_absolute_seqno;
+    }
+
 };
 
 #endif  // SPONGE_LIBSPONGE_TCP_SENDER_HH
