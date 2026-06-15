@@ -6,7 +6,9 @@
 #include "tcp_segment.hh"
 #include "wrapping_integers.hh"
 
+#include <deque>
 #include <functional>
+#include <optional>
 #include <queue>
 
 //! \brief The "sender" part of a TCP implementation.
@@ -32,15 +34,11 @@ class TCPTimer {
 
     unsigned int retransmission() const { return _retransmission; }
 
-    bool timer() {
-        printf("_time_running:%d\n", _time_running);
-        return _time_running;
-    }
+    bool timer() { return _time_running; }
 
     void runing() { _time_running = true; }
 
     void close() {
-        printf("timer closing\n");
         _time_running = false;
         _retransmission = 0;
     }
@@ -48,7 +46,6 @@ class TCPTimer {
     unsigned int rtoValue() { return _rto; }
 
     void start() {
-        printf("timer start\n");
         _time_running = true;
         _rto = _init_time;
         _time_passed = 0;
@@ -56,12 +53,8 @@ class TCPTimer {
     }
 
     void double_rto_restart(const size_t window) {
-        printf("double_rto_restart-----------_time_running:%d\n", _time_running);
-
         if (_time_running == false)
           return;
-
-        printf("window:%ld\n", window);
 
         if (window != 0)
             _rto *= 2;
@@ -72,14 +65,10 @@ class TCPTimer {
 
     bool rto(const size_t ms_since_last_tick) {
         //进入判断是否超时的阶段
-        printf("time_running:%d\n", timer());
-
         if (_time_running == false)
             return false;
 
         _time_passed += ms_since_last_tick;
-
-        printf("time:passed:%d\n", _time_passed);
 
         if (_time_passed >= _rto)
             return true;
