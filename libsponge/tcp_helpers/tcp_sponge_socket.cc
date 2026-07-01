@@ -131,6 +131,9 @@ void TCPSpongeSocket<AdaptT>::_initialize_TCP(const TCPConfig &config) {
             const std::string buffer = inbound.peek_output(amount_to_write);
             const auto bytes_written = _thread_data.write(move(buffer), false);
             inbound.pop_output(bytes_written);
+            if (bytes_written > 0) {
+                _tcp->send_empty_segment();
+            }
 
             if (inbound.eof() or inbound.error()) {
                 _thread_data.shutdown(SHUT_WR);

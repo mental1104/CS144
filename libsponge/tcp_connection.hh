@@ -21,6 +21,18 @@ class TCPConnection {
     //! in case the remote TCPConnection doesn't know we've received its whole stream?
     bool _linger_after_streams_finish{true};
 
+    size_t _time_since_last_segment_received{0};
+    bool _active{true};
+
+    //! Move sender output to the connection output queue, filling ACK/window fields.
+    void send_segments();
+
+    //! Send a RST and mark both streams as errored.
+    void reset_connection();
+
+    //! Update the connection liveness after state changes or time passage.
+    void update_active();
+
   public:
     //! \name "Input" interface for the writer
     //!@{
@@ -67,6 +79,9 @@ class TCPConnection {
 
     //! Called periodically when time elapses
     void tick(const size_t ms_since_last_tick);
+
+    //! Send an empty segment carrying the latest ACK/window, if available.
+    void send_empty_segment();
 
     //! \brief TCPSegments that the TCPConnection has enqueued for transmission.
     //! \note The owner or operating system will dequeue these and
