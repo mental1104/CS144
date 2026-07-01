@@ -1,8 +1,8 @@
 #ifndef SPONGE_LIBSPONGE_BYTE_STREAM_HH
 #define SPONGE_LIBSPONGE_BYTE_STREAM_HH
 
+#include <deque>
 #include <string>
-#include "buffer.hh"
 
 //! \brief An in-order byte stream.
 
@@ -17,7 +17,9 @@ class ByteStream {
     // all, but if any of your tests are taking longer than a second,
     // that's a sign that you probably want to keep exploring
     // different approaches.
-    BufferList _buffer{};
+    std::deque<std::string> _chunks{};
+    size_t _front_offset{0};
+    size_t _buffer_size{0};
     size_t _capacity{0};
     size_t _read_count{0};
     size_t _write_count{0};
