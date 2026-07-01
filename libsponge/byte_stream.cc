@@ -1,6 +1,7 @@
 #include "byte_stream.hh"
 
 #include <algorithm>
+#include <utility>
 
 // Dummy implementation of a flow-controlled in-memory byte stream.
 
@@ -16,12 +17,14 @@ using namespace std;
 
 namespace {
 constexpr size_t CHUNK_TARGET_SIZE = 4096;
+constexpr size_t DIRECT_CHUNK_THRESHOLD = CHUNK_TARGET_SIZE * 16;
+constexpr size_t FRONT_COMPACT_PREFIX_THRESHOLD = CHUNK_TARGET_SIZE * 4;
+constexpr size_t FRONT_COMPACT_REMAINING_THRESHOLD = CHUNK_TARGET_SIZE;
 }
 
 ByteStream::ByteStream(const size_t capacity):_capacity(capacity) {}
 
-size_t ByteStream::write(const string &data) {
-    const size_t len = min(data.length(), remaining_capacity());
+void ByteStream::append_copy(const char *data, const size_t len) {
     size_t copied = 0;
 
     while (copied < len) {
@@ -33,8 +36,43 @@ size_t ByteStream::write(const string &data) {
         string &tail = _chunks.back();
         const size_t room = CHUNK_TARGET_SIZE - tail.size();
         const size_t n = min(room, len - copied);
-        tail.append(data.data() + copied, n);
+        tail.append(data + copied, n);
         copied += n;
+    }
+}
+
+void ByteStream::compact_front_if_sparse() {
+    if (_chunks.empty() || _front_offset < FRONT_COMPACT_PREFIX_THRESHOLD) {
+        return;
+    }
+
+    string &front = _chunks.front();
+    const size_t remaining = front.size() - _front_offset;
+    if (remaining <= FRONT_COMPACT_REMAINING_THRESHOLD) {
+        string compacted{front.data() + _front_offset, remaining};
+        front.swap(compacted);
+        _front_offset = 0;
+    }
+}
+
+size_t ByteStream::write(const string &data) {
+    const size_t len = min(data.length(), remaining_capacity());
+
+    append_copy(data.data(), len);
+
+    _write_count += len;
+    _buffer_size += len;
+    return len;
+}
+
+size_t ByteStream::write(string &&data) {
+    const size_t len = min(data.length(), remaining_capacity());
+
+    if (len >= DIRECT_CHUNK_THRESHOLD) {
+        data.resize(len);
+        _chunks.emplace_back(move(data));
+    } else {
+        append_copy(data.data(), len);
     }
 
     _write_count += len;
@@ -74,6 +112,7 @@ void ByteStream::pop_output(const size_t len) {
         if (remaining < available) {
             _front_offset += remaining;
             remaining = 0;
+            compact_front_if_sparse();
         } else {
             remaining -= available;
             _chunks.pop_front();
@@ -86,9 +125,31 @@ void ByteStream::pop_output(const size_t len) {
 //! \param[in] len bytes will be popped and returned
 //! \returns a string
 std::string ByteStream::read(const size_t len) {
-    string readStr = peek_output(len);//先读取
-    pop_output(len);//再弹出
-    return readStr;
+    const size_t length = min(len, _buffer_size);
+    string output;
+    output.reserve(length);
+
+    size_t remaining = length;
+    while (remaining > 0) {
+        string &front = _chunks.front();
+        const size_t available = front.size() - _front_offset;
+        const size_t n = min(available, remaining);
+
+        output.append(front.data() + _front_offset, n);
+        remaining -= n;
+
+        if (n < available) {
+            _front_offset += n;
+            compact_front_if_sparse();
+        } else {
+            _chunks.pop_front();
+            _front_offset = 0;
+        }
+    }
+
+    _read_count += length;
+    _buffer_size -= length;
+    return output;
 }
 
 void ByteStream::end_input() {  _input_ended_flag = true;  }

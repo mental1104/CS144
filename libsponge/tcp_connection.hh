@@ -43,6 +43,7 @@ class TCPConnection {
     //! \brief Write data to the outbound byte stream, and send it over TCP if possible
     //! \returns the number of bytes from `data` that were actually written.
     size_t write(const std::string &data);
+    size_t write(std::string &&data);
 
     //! \returns the number of `bytes` that can be written right now.
     size_t remaining_outbound_capacity() const;

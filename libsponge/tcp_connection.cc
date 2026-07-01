@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <iostream>
 #include <limits>
+#include <utility>
 
 // Dummy implementation of a TCP connection
 
@@ -119,6 +120,14 @@ bool TCPConnection::active() const { return _active; }
 
 size_t TCPConnection::write(const string &data) {
     const size_t bytes_written = _sender.stream_in().write(data);
+    _sender.fill_window();
+    send_segments();
+    update_active();
+    return bytes_written;
+}
+
+size_t TCPConnection::write(string &&data) {
+    const size_t bytes_written = _sender.stream_in().write(move(data));
     _sender.fill_window();
     send_segments();
     update_active();
