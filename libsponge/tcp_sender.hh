@@ -20,61 +20,64 @@
 
 class TCPTimer {
   private:
-    bool _time_running;
-    unsigned int _rto;
-    unsigned int _init_time;
-    unsigned int _time_passed;
-    unsigned int _retransmission;
+    bool _running;
+    unsigned int _current_rto;
+    unsigned int _initial_rto;
+    unsigned int _elapsed;
+    unsigned int _consecutive_retransmissions;
 
   public:
     TCPTimer(const size_t rto = TCPConfig::TIMEOUT_DFLT,
              const size_t init_time = TCPConfig::TIMEOUT_DFLT)
-    : _time_running(false), _rto(rto), _init_time(init_time), _time_passed(0),
-      _retransmission(0){};
+    : _running(false), _current_rto(rto), _initial_rto(init_time), _elapsed(0),
+      _consecutive_retransmissions(0){};
 
-    unsigned int retransmission() const { return _retransmission; }
+    unsigned int retransmission() const { return _consecutive_retransmissions; }
 
-    bool timer() { return _time_running; }
-
-    void runing() { _time_running = true; }
-
-    void close() {
-        _time_running = false;
-        _retransmission = 0;
-    }
-
-    unsigned int rtoValue() { return _rto; }
+    bool is_running() const { return _running; }
 
     void start() {
-        _time_running = true;
-        _rto = _init_time;
-        _time_passed = 0;
-        _retransmission = 0;
+        _running = true;
+        _current_rto = _initial_rto;
+        _elapsed = 0;
+        _consecutive_retransmissions = 0;
     }
 
-    void double_rto_restart(const size_t window) {
-        if (_time_running == false)
+    void stop() {
+        _running = false;
+        _consecutive_retransmissions = 0;
+    }
+
+    unsigned int current_rto() const { return _current_rto; }
+
+    void restart_after_timeout(const size_t window) {
+        if (_running == false)
           return;
 
         if (window != 0) {
-            _rto *= 2;
-            _retransmission++;
+            _current_rto *= 2;
+            _consecutive_retransmissions++;
         }
 
-        _time_passed = 0;
+        _elapsed = 0;
     }
 
-    bool rto(const size_t ms_since_last_tick) {
-        //进入判断是否超时的阶段
-        if (_time_running == false)
+    bool advance_and_expired(const size_t ms_since_last_tick) {
+        if (_running == false)
             return false;
 
-        _time_passed += ms_since_last_tick;
+        _elapsed += ms_since_last_tick;
 
-        if (_time_passed >= _rto)
+        if (_elapsed >= _current_rto)
             return true;
         return false;
     }
+
+    bool timer() const { return is_running(); }
+    void close() { stop(); }
+    unsigned int rtoValue() const { return current_rto(); }
+    void double_rto_restart(const size_t window) { restart_after_timeout(window); }
+    bool rto(const size_t ms_since_last_tick) { return advance_and_expired(ms_since_last_tick); }
 };
 
 class TCPSender {
