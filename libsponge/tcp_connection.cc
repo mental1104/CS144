@@ -23,16 +23,58 @@ size_t TCPConnection::unassembled_bytes() const { return _receiver.unassembled_b
 
 size_t TCPConnection::time_since_last_segment_received() const { return _time_since_last_segment_received; }
 
+bool TCPConnection::in_listen_state() const {
+    return !_receiver.ackno().has_value() && _sender.next_seqno_absolute() == 0;
+}
+
+bool TCPConnection::inbound_stream_finished() const { return _receiver.stream_out().input_ended(); }
+
+bool TCPConnection::outbound_stream_finished() const { return _sender.stream_in().eof(); }
+
+bool TCPConnection::has_unacknowledged_segments() const { return _sender.bytes_in_flight() != 0; }
+
+bool TCPConnection::clean_shutdown_complete() const {
+    return inbound_stream_finished() && outbound_stream_finished() && !has_unacknowledged_segments();
+}
+
+bool TCPConnection::linger_timer_expired() const {
+    return _time_since_last_segment_received >= 10 * _cfg.rt_timeout;
+}
+
+void TCPConnection::fill_ack_and_window(TCPSegment &seg) const {
+    if (!_receiver.ackno().has_value()) {
+        return;
+    }
+
+    seg.header().ack = true;
+    seg.header().ackno = _receiver.ackno().value();
+    seg.header().win = min(_receiver.window_size(), size_t{numeric_limits<uint16_t>::max()});
+}
+
+void TCPConnection::mark_streams_error() {
+    _sender.stream_in().set_error();
+    _receiver.stream_out().set_error();
+    _active = false;
+}
+
+void TCPConnection::disable_linger_after_passive_close() {
+    if (inbound_stream_finished() && !outbound_stream_finished()) {
+        _linger_after_streams_finish = false;
+    }
+}
+
+void TCPConnection::send_ack_if_needed(const TCPSegment &seg) {
+    if (seg.length_in_sequence_space() > 0 && _sender.segments_out().empty()) {
+        _sender.send_empty_segment();
+    }
+}
+
 void TCPConnection::send_segments() {
     while (!_sender.segments_out().empty()) {
         TCPSegment seg = _sender.segments_out().front();
         _sender.segments_out().pop();
 
-        if (_receiver.ackno().has_value()) {
-            seg.header().ack = true;
-            seg.header().ackno = _receiver.ackno().value();
-            seg.header().win = min(_receiver.window_size(), size_t{numeric_limits<uint16_t>::max()});
-        }
+        fill_ack_and_window(seg);
 
         _segments_out.push(seg);
     }
@@ -43,16 +85,10 @@ void TCPConnection::reset_connection() {
     rst_seg.header().rst = true;
     rst_seg.header().seqno = _sender.next_seqno();
 
-    if (_receiver.ackno().has_value()) {
-        rst_seg.header().ack = true;
-        rst_seg.header().ackno = _receiver.ackno().value();
-        rst_seg.header().win = min(_receiver.window_size(), size_t{numeric_limits<uint16_t>::max()});
-    }
+    fill_ack_and_window(rst_seg);
 
     _segments_out.push(rst_seg);
-    _sender.stream_in().set_error();
-    _receiver.stream_out().set_error();
-    _active = false;
+    mark_streams_error();
 }
 
 void TCPConnection::update_active() {
@@ -61,12 +97,12 @@ void TCPConnection::update_active() {
         return;
     }
 
-    if (!_receiver.stream_out().input_ended() || !_sender.stream_in().eof() || _sender.bytes_in_flight() != 0) {
+    if (!clean_shutdown_complete()) {
         _active = true;
         return;
     }
 
-    if (!_linger_after_streams_finish || _time_since_last_segment_received >= 10 * _cfg.rt_timeout) {
+    if (!_linger_after_streams_finish || linger_timer_expired()) {
         _active = false;
     } else {
         _active = true;
@@ -79,18 +115,15 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
     }
 
     const TCPHeader &header = seg.header();
-    const bool in_listen = !_receiver.ackno().has_value() && _sender.next_seqno_absolute() == 0;
 
     if (header.rst) {
-        if (!in_listen) {
-            _sender.stream_in().set_error();
-            _receiver.stream_out().set_error();
-            _active = false;
+        if (!in_listen_state()) {
+            mark_streams_error();
         }
         return;
     }
 
-    if (in_listen && !header.syn) {
+    if (in_listen_state() && !header.syn) {
         return;
     }
 
@@ -102,15 +135,11 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
 
     _receiver.segment_received(seg);
 
-    if (_receiver.stream_out().input_ended() && !_sender.stream_in().eof()) {
-        _linger_after_streams_finish = false;
-    }
+    disable_linger_after_passive_close();
 
     _sender.fill_window();
 
-    if (seg.length_in_sequence_space() > 0 && _sender.segments_out().empty()) {
-        _sender.send_empty_segment();
-    }
+    send_ack_if_needed(seg);
 
     send_segments();
     update_active();

@@ -24,6 +24,36 @@ class TCPConnection {
     size_t _time_since_last_segment_received{0};
     bool _active{true};
 
+    //! True before either endpoint has sent or received a SYN.
+    bool in_listen_state() const;
+
+    //! True once the peer has finished its outbound stream with FIN.
+    bool inbound_stream_finished() const;
+
+    //! True once the local application has ended its outbound stream.
+    bool outbound_stream_finished() const;
+
+    //! True while the sender still has segments that must be acknowledged.
+    bool has_unacknowledged_segments() const;
+
+    //! True once both byte streams are finished and no local data is in flight.
+    bool clean_shutdown_complete() const;
+
+    //! True once the TIME_WAIT-style linger period has elapsed.
+    bool linger_timer_expired() const;
+
+    //! Fill ACK and advertised window fields when the receiver has seen a SYN.
+    void fill_ack_and_window(TCPSegment &seg) const;
+
+    //! Mark both byte streams as errored and make the connection inactive.
+    void mark_streams_error();
+
+    //! Disable linger for passive close, where the peer sent FIN first.
+    void disable_linger_after_passive_close();
+
+    //! Send an empty ACK if the received segment consumed sequence space.
+    void send_ack_if_needed(const TCPSegment &seg);
+
     //! Move sender output to the connection output queue, filling ACK/window fields.
     void send_segments();
 
