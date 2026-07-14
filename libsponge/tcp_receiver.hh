@@ -7,6 +7,7 @@
 #include "wrapping_integers.hh"
 
 #include <optional>
+#include <string>
 
 //! \brief The "receiver" part of a TCP implementation.
 
@@ -23,6 +24,8 @@ class TCPReceiver {
     WrappingInt32 _isn{WrappingInt32(0)};
     bool _syn_recved{false};
     bool _fin_recved{false};
+
+    void segment_received_impl(const TCPHeader &header, std::string data);
 
   public:
     //! \brief Construct a TCP receiver
@@ -59,6 +62,7 @@ class TCPReceiver {
 
     //! \brief handle an inbound segment
     void segment_received(const TCPSegment &seg);
+    void segment_received(TCPSegment &&seg);
 
     //! \name "Output" interface for the reader
     //!@{

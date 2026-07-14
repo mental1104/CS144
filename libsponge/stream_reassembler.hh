@@ -4,13 +4,14 @@
 #include "byte_stream.hh"
 
 #include <cstdint>
-#include <string>
 #include <set>
+#include <string>
+#include <utility>
 
 struct TypeUnassembled {
     size_t index;
     std::string data;
-    TypeUnassembled(size_t _index, std::string _data) : index(_index), data(_data) {}
+    TypeUnassembled(size_t _index, std::string _data) : index(_index), data(std::move(_data)) {}
     bool operator<(const TypeUnassembled &t1) const { return index < t1.index; }
 };
 
@@ -20,6 +21,7 @@ class StreamReassembler {
   private:
     // Your code here -- add private members as necessary.
     size_t merge_substring(std::string& data, uint64_t &index, std::set<TypeUnassembled>::iterator iter);
+    void push_substring_impl(std::string data, const uint64_t index, const bool eof);
 
     std::set<TypeUnassembled> _Unassembled{};
     size_t _firstUnassembled{0};
@@ -46,6 +48,7 @@ class StreamReassembler {
     //! \param index indicates the index (place in sequence) of the first byte in `data`
     //! \param eof the last byte of `data` will be the last byte in the entire stream
     void push_substring(const std::string &data, const uint64_t index, const bool eof);
+    void push_substring(std::string &&data, const uint64_t index, const bool eof);
 
 
     //! \name Access the reassembled byte stream

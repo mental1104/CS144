@@ -107,6 +107,7 @@ class TCPConnection {
 
     //! Called when a new segment has been received from the network
     void segment_received(const TCPSegment &seg);
+    void segment_received(TCPSegment &&seg);
 
     //! Called periodically when time elapses
     void tick(const size_t ms_since_last_tick);
