@@ -37,7 +37,7 @@ uint64_t unwrap(WrappingInt32 n, WrappingInt32 isn, uint64_t checkpoint) {
     uint64_t diff_b = (checkpoint > b)? (checkpoint-b):(b-checkpoint);
     uint64_t c      = (top32 + (1ul << 32)) + offset;
     uint64_t diff_c = c - checkpoint;
-    
+
     if(top32 == 0)
         return (diff_b < diff_c)? b : c;
 

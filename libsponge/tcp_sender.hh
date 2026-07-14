@@ -6,7 +6,9 @@
 #include "tcp_segment.hh"
 #include "wrapping_integers.hh"
 
+#include <deque>
 #include <functional>
+#include <optional>
 #include <queue>
 
 //! \brief The "sender" part of a TCP implementation.
@@ -18,73 +20,64 @@
 
 class TCPTimer {
   private:
-    bool _time_running;
-    unsigned int _rto;
-    unsigned int _init_time;
-    unsigned int _time_passed;
-    unsigned int _retransmission;
+    bool _running;
+    unsigned int _current_rto;
+    unsigned int _initial_rto;
+    unsigned int _elapsed;
+    unsigned int _consecutive_retransmissions;
 
   public:
     TCPTimer(const size_t rto = TCPConfig::TIMEOUT_DFLT,
              const size_t init_time = TCPConfig::TIMEOUT_DFLT)
-    : _time_running(false), _rto(rto), _init_time(init_time), _time_passed(0),
-      _retransmission(0){};
+    : _running(false), _current_rto(rto), _initial_rto(init_time), _elapsed(0),
+      _consecutive_retransmissions(0){};
 
-    unsigned int retransmission() const { return _retransmission; }
+    unsigned int retransmission() const { return _consecutive_retransmissions; }
 
-    bool timer() {
-        printf("_time_running:%d\n", _time_running);
-        return _time_running;
-    }
-
-    void runing() { _time_running = true; }
-
-    void close() {
-        printf("timer closing\n");
-        _time_running = false;
-        _retransmission = 0;
-    }
-
-    unsigned int rtoValue() { return _rto; }
+    bool is_running() const { return _running; }
 
     void start() {
-        printf("timer start\n");
-        _time_running = true;
-        _rto = _init_time;
-        _time_passed = 0;
-        _retransmission = 0;
+        _running = true;
+        _current_rto = _initial_rto;
+        _elapsed = 0;
+        _consecutive_retransmissions = 0;
     }
 
-    void double_rto_restart(const size_t window) {
-        printf("double_rto_restart-----------_time_running:%d\n", _time_running);
+    void stop() {
+        _running = false;
+        _consecutive_retransmissions = 0;
+    }
 
-        if (_time_running == false)
+    unsigned int current_rto() const { return _current_rto; }
+
+    void restart_after_timeout(const size_t window) {
+        if (_running == false)
           return;
 
-        printf("window:%ld\n", window);
+        if (window != 0) {
+            _current_rto *= 2;
+            _consecutive_retransmissions++;
+        }
 
-        if (window != 0)
-            _rto *= 2;
-
-        _time_passed = 0;
-        _retransmission++;
+        _elapsed = 0;
     }
 
-    bool rto(const size_t ms_since_last_tick) {
-        //进入判断是否超时的阶段
-        printf("time_running:%d\n", timer());
-
-        if (_time_running == false)
+    bool advance_and_expired(const size_t ms_since_last_tick) {
+        if (_running == false)
             return false;
 
-        _time_passed += ms_since_last_tick;
+        _elapsed += ms_since_last_tick;
 
-        printf("time:passed:%d\n", _time_passed);
-
-        if (_time_passed >= _rto)
+        if (_elapsed >= _current_rto)
             return true;
         return false;
     }
+
+    bool timer() const { return is_running(); }
+    void close() { stop(); }
+    unsigned int rtoValue() const { return current_rto(); }
+    void double_rto_restart(const size_t window) { restart_after_timeout(window); }
+    bool rto(const size_t ms_since_last_tick) { return advance_and_expired(ms_since_last_tick); }
 };
 
 class TCPSender {
@@ -108,6 +101,7 @@ class TCPSender {
 
     size_t _window_size{1};
     bool _flag_fin{false};
+    size_t _bytes_in_flight{0};
 
     // 标记收到的outstanding_tcp
     std::deque<TCPSegment> _outstanding_segment{};

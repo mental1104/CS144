@@ -1,5 +1,8 @@
 #include "byte_stream.hh"
 
+#include <algorithm>
+#include <utility>
+
 // Dummy implementation of a flow-controlled in-memory byte stream.
 
 // For Lab 0, please replace with a real implementation that passes the
@@ -12,54 +15,150 @@ void DUMMY_CODE(Targs &&... /* unused */) {}
 
 using namespace std;
 
+namespace {
+constexpr size_t CHUNK_TARGET_SIZE = 4096;
+constexpr size_t DIRECT_CHUNK_THRESHOLD = CHUNK_TARGET_SIZE * 16;
+constexpr size_t FRONT_COMPACT_PREFIX_THRESHOLD = CHUNK_TARGET_SIZE * 4;
+constexpr size_t FRONT_COMPACT_REMAINING_THRESHOLD = CHUNK_TARGET_SIZE;
+}
+
 ByteStream::ByteStream(const size_t capacity):_capacity(capacity) {}
 
+void ByteStream::append_copy(const char *data, const size_t len) {
+    size_t copied = 0;
+
+    while (copied < len) {
+        if (_chunks.empty() || _chunks.back().size() >= CHUNK_TARGET_SIZE) {
+            _chunks.emplace_back();
+            _chunks.back().reserve(min(CHUNK_TARGET_SIZE, max(_capacity, size_t{1})));
+        }
+
+        string &tail = _chunks.back();
+        const size_t room = CHUNK_TARGET_SIZE - tail.size();
+        const size_t n = min(room, len - copied);
+        tail.append(data + copied, n);
+        copied += n;
+    }
+}
+
+void ByteStream::compact_front_if_sparse() {
+    if (_chunks.empty() || _front_offset < FRONT_COMPACT_PREFIX_THRESHOLD) {
+        return;
+    }
+
+    string &front = _chunks.front();
+    const size_t remaining = front.size() - _front_offset;
+    if (remaining <= FRONT_COMPACT_REMAINING_THRESHOLD) {
+        string compacted{front.data() + _front_offset, remaining};
+        front.swap(compacted);
+        _front_offset = 0;
+    }
+}
+
 size_t ByteStream::write(const string &data) {
-    size_t len = data.length();     //取得数据的长度
-    if(len > remaining_capacity())  //如果长度大于剩余量，那么
-        len = remaining_capacity(); //将数据的长度设置为等于剩余量
-    _write_count += len;            //更新写入的数量
-    _buffer.append(BufferList(move(string().assign(data.begin(),data.begin()+len))));
-    //将数据写入buffer，剩余的可能被切断
-    return len; //返回写入的量
+    const size_t len = min(data.length(), remaining_capacity());
+
+    append_copy(data.data(), len);
+
+    _write_count += len;
+    _buffer_size += len;
+    return len;
+}
+
+size_t ByteStream::write(string &&data) {
+    const size_t len = min(data.length(), remaining_capacity());
+
+    if (len >= DIRECT_CHUNK_THRESHOLD) {
+        data.resize(len);
+        _chunks.emplace_back(move(data));
+    } else {
+        append_copy(data.data(), len);
+    }
+
+    _write_count += len;
+    _buffer_size += len;
+    return len;
 }
 
 //! \param[in] len bytes will be copied from the output side of the buffer
 string ByteStream::peek_output(const size_t len) const {
-    size_t length = len; //读取长度
-    if(length > _buffer.size()) //吐出bufferlist里现有的内容，故不能大于bufferlist的总大小。
-        length = _buffer.size();
-    string s = _buffer.concatenate();
-    return string().assign(s.begin(), s.begin()+length); //返回该流中前length个数据
+    const size_t length = min(len, _buffer_size);
+    string output;
+    output.reserve(length);
+
+    size_t remaining = length;
+    for (auto it = _chunks.begin(); it != _chunks.end() && remaining > 0; ++it) {
+        const size_t offset = (it == _chunks.begin()) ? _front_offset : 0;
+        const size_t available = it->size() - offset;
+        const size_t n = min(available, remaining);
+        output.append(it->data() + offset, n);
+        remaining -= n;
+    }
+
+    return output;
 }
 
 //! \param[in] len bytes will be removed from the output side of the buffer
 void ByteStream::pop_output(const size_t len) {
-    size_t length = len;
-    if(length > _buffer.size())
-        length = _buffer.size();
-    _read_count += length; 
-    //更新已读的量，和write不同，read不会把读完的数据清除, 所以需要在这一步更新。
-    _buffer.remove_prefix(length);
-    return;
+    const size_t length = min(len, _buffer_size);
+    _read_count += length;
+    _buffer_size -= length;
+
+    size_t remaining = length;
+    while (remaining > 0) {
+        string &front = _chunks.front();
+        const size_t available = front.size() - _front_offset;
+
+        if (remaining < available) {
+            _front_offset += remaining;
+            remaining = 0;
+            compact_front_if_sparse();
+        } else {
+            remaining -= available;
+            _chunks.pop_front();
+            _front_offset = 0;
+        }
+    }
 }
 
 //! Read (i.e., copy and then pop) the next "len" bytes of the stream
 //! \param[in] len bytes will be popped and returned
 //! \returns a string
 std::string ByteStream::read(const size_t len) {
-    string readStr = peek_output(len);//先读取
-    pop_output(len);//再弹出
-    return readStr;
+    const size_t length = min(len, _buffer_size);
+    string output;
+    output.reserve(length);
+
+    size_t remaining = length;
+    while (remaining > 0) {
+        string &front = _chunks.front();
+        const size_t available = front.size() - _front_offset;
+        const size_t n = min(available, remaining);
+
+        output.append(front.data() + _front_offset, n);
+        remaining -= n;
+
+        if (n < available) {
+            _front_offset += n;
+            compact_front_if_sparse();
+        } else {
+            _chunks.pop_front();
+            _front_offset = 0;
+        }
+    }
+
+    _read_count += length;
+    _buffer_size -= length;
+    return output;
 }
 
 void ByteStream::end_input() {  _input_ended_flag = true;  }
 
 bool ByteStream::input_ended() const { return _input_ended_flag; }
 
-size_t ByteStream::buffer_size() const { return _buffer.size(); }
+size_t ByteStream::buffer_size() const { return _buffer_size; }
 
-bool ByteStream::buffer_empty() const { return _buffer.size() == 0; }
+bool ByteStream::buffer_empty() const { return _buffer_size == 0; }
 
 bool ByteStream::eof() const { return buffer_empty() && input_ended(); }
 
@@ -67,4 +166,4 @@ size_t ByteStream::bytes_written() const { return _write_count; }
 
 size_t ByteStream::bytes_read() const { return _read_count; }
 
-size_t ByteStream::remaining_capacity() const { return _capacity - _buffer.size(); }
+size_t ByteStream::remaining_capacity() const { return _capacity - _buffer_size; }

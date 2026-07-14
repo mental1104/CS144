@@ -1,5 +1,7 @@
 #include "stream_reassembler.hh"
 
+#include <utility>
+
 // Dummy implementation of a stream reassembler.
 
 // For Lab 1, please replace with a real implementation that passes the
@@ -14,7 +16,7 @@ using namespace std;
 
 StreamReassembler::StreamReassembler(const size_t capacity) : _output(capacity), _capacity(capacity) {}
 
-size_t 
+size_t
 StreamReassembler::merge_substring(std::string& data, uint64_t &index, std::set<TypeUnassembled>::iterator iter){
     string s = iter->data;
     size_t l1 = index, r1 = index + data.size()-1;
@@ -39,24 +41,24 @@ StreamReassembler::merge_substring(std::string& data, uint64_t &index, std::set<
 //! \details This function accepts a substring (aka a segment) of bytes,
 //! possibly out-of-order, from the logical stream, and assembles any newly
 //! contiguous substrings and writes them into the output stream in order.
-void StreamReassembler::push_substring(const string &data, const size_t index, const bool eof) {
+void StreamReassembler::push_substring_impl(string data, const size_t index, const bool eof) {
+    size_t firstUnacceptable = _firstUnassembled + _output.remaining_capacity();
+    const size_t eof_index = index + data.size();
+
+    if(eof && eof_index <= firstUnacceptable){
+        _eof = true;
+        _eof_index = eof_index;
+    }
+
     if(data.empty() || index + data.size() <= _firstUnassembled){
-        _eof |= eof;
-        if (_eof)
+        if (_eof && _firstUnassembled == _eof_index)
             _output.end_input();
         return;
     }
 
-
-    size_t firstUnacceptable = _firstUnassembled + _output.remaining_capacity();
-
-    if (index + data.size() <= firstUnacceptable){
-        _eof |= eof;
-    }//大于数据量的时候就不要设EOF了
-
     std::set<TypeUnassembled>::iterator iter;
     size_t resIndex = index;
-    string resData = std::string(data); 
+    string resData = move(data);
 
     if (resIndex < _firstUnassembled) {//数据大小超过了head_index
         resData = resData.substr(_firstUnassembled - resIndex);//截掉重合包，并将数据和索引都更新为
@@ -79,31 +81,43 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
                 _Unassembled.erase(iter);
                 break;
             }
-        } else 
+        } else
             break;
-    }//向前合并。 //necessary, (bcd, 1) (c, 3) 
+    }//向前合并。 //necessary, (bcd, 1) (c, 3)
 
     iter = _Unassembled.lower_bound(TypeUnassembled(resIndex,resData));//不小于resIndex的值
     while(iter != _Unassembled.end()){
         if(size_t deleteNum = merge_substring(resData, resIndex, iter)){
             _nUnassembled-=deleteNum;
             _Unassembled.erase(iter++);
-        } else 
+        } else
             break;
     }
 
     if(resIndex <= _firstUnassembled){
-        size_t written_size = _output.write(string(resData.begin() + _firstUnassembled - resIndex, resData.end()));
+        const size_t offset = _firstUnassembled - resIndex;
+        size_t written_size = offset == 0
+                                  ? _output.write(move(resData))
+                                  : _output.write(string(resData.begin() + offset, resData.end()));
         _firstUnassembled += written_size;
     } else {
-        _Unassembled.insert(TypeUnassembled(resIndex,resData));
-        _nUnassembled += resData.size();
+        const size_t assembled_size = resData.size();
+        _Unassembled.insert(TypeUnassembled(resIndex, move(resData)));
+        _nUnassembled += assembled_size;
     }
 
-    if (_eof && empty()) {
+    if (_eof && _firstUnassembled == _eof_index) {
         _output.end_input();
     }
     return;
+}
+
+void StreamReassembler::push_substring(const string &data, const size_t index, const bool eof) {
+    push_substring_impl(data, index, eof);
+}
+
+void StreamReassembler::push_substring(string &&data, const size_t index, const bool eof) {
+    push_substring_impl(move(data), index, eof);
 }
 
 
