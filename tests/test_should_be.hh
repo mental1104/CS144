@@ -10,9 +10,9 @@
 
 #define test_should_be(act, exp) _test_should_be(act, exp, #act, #exp, __LINE__)
 
-template <typename T>
-static void _test_should_be(const T &actual,
-                            const T &expected,
+template <typename Actual, typename Expected>
+static void _test_should_be(const Actual &actual,
+                            const Expected &expected,
                             const char *actual_s,
                             const char *expected_s,
                             const int lineno) {

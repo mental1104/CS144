@@ -110,12 +110,15 @@ void TCPConnection::update_active() {
 }
 
 void TCPConnection::segment_received(const TCPSegment &seg) {
+    // 连接已经关闭或被重置后，后续收到的任何报文都不再参与状态机处理。
     if (!_active) {
         return;
     }
 
     const TCPHeader &header = seg.header();
 
+    // RST 会立即终止已建立或已同步的连接；但 LISTEN 状态下还没有具体连接，
+    // 此时收到的 RST 不应该把本地输入/输出流标成错误，直接忽略即可。
     if (header.rst) {
         if (!in_listen_state()) {
             mark_streams_error();
@@ -123,16 +126,25 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
         return;
     }
 
+    // LISTEN 状态的主线是等待 SYN 来创建连接状态。非 SYN 报文既不能推进握手，
+    // 也没有可接受的序列号空间，因此短路丢弃，不更新时间、ACK 或发送侧状态。
     if (in_listen_state() && !header.syn) {
         return;
     }
 
+    // 走到这里说明报文和当前连接相关：要么是握手 SYN，要么属于已有连接。
+    // 因此它应当刷新“上次收到报文”的计时。
     _time_since_last_segment_received = 0;
 
+    // ACK 分支只更新发送侧：释放已确认的数据，并记录对端通告窗口。
+    // 这个分支不会提前退出，因为同一个报文还可能携带 SYN/FIN 或 payload。
     if (header.ack) {
         _sender.ack_received(header.ackno, header.win);
     }
 
+    // 主线：先把占用序列号空间的内容交给接收侧重组，再根据被动关闭情况调整
+    // linger；随后让发送侧利用新窗口继续发数据。如果对端发来了数据/控制位但
+    // 当前没有待发响应，则补一个纯 ACK，最后给所有待发报文填上 ACK 和窗口。
     _receiver.segment_received(seg);
 
     disable_linger_after_passive_close();
@@ -147,20 +159,19 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
 
 bool TCPConnection::active() const { return _active; }
 
-size_t TCPConnection::write(const string &data) {
-    const size_t bytes_written = _sender.stream_in().write(data);
+template <typename Data>
+size_t TCPConnection::write_impl(Data &&data) {
+    const size_t bytes_written = _sender.stream_in().write(std::forward<Data>(data));
     _sender.fill_window();
     send_segments();
     update_active();
     return bytes_written;
 }
 
+size_t TCPConnection::write(const string &data) { return write_impl(data); }
+
 size_t TCPConnection::write(string &&data) {
-    const size_t bytes_written = _sender.stream_in().write(move(data));
-    _sender.fill_window();
-    send_segments();
-    update_active();
-    return bytes_written;
+    return write_impl(std::move(data));
 }
 
 //! \param[in] ms_since_last_tick number of milliseconds since the last call to this method

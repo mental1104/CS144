@@ -31,15 +31,15 @@ T NetParser::_parse_int() {
         return 0;
     }
 
-    T ret = 0;
+    uint64_t ret = 0;
     for (size_t i = 0; i < len; i++) {
         ret <<= 8;
-        ret += uint8_t(_buffer.at(i));
+        ret += static_cast<uint8_t>(_buffer.at(i));
     }
 
     _buffer.remove_prefix(len);
 
-    return ret;
+    return static_cast<T>(ret);
 }
 
 void NetParser::remove_prefix(const size_t n) {

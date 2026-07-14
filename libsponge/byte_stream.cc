@@ -70,7 +70,7 @@ size_t ByteStream::write(string &&data) {
 
     if (len >= DIRECT_CHUNK_THRESHOLD) {
         data.resize(len);
-        _chunks.emplace_back(move(data));
+        _chunks.emplace_back(std::move(data));
     } else {
         append_copy(data.data(), len);
     }

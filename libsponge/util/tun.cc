@@ -2,15 +2,20 @@
 
 #include "util.hh"
 
+#ifdef __linux__
 #include <cstring>
 #include <fcntl.h>
 #include <linux/if.h>
 #include <linux/if_tun.h>
 #include <sys/ioctl.h>
-
-static constexpr const char *CLONEDEV = "/dev/net/tun";
+#else
+#include <stdexcept>
+#endif
 
 using namespace std;
+
+#ifdef __linux__
+static constexpr const char *CLONEDEV = "/dev/net/tun";
 
 //! \param[in] devname is the name of the TUN or TAP device, specified at its creation.
 //! \param[in] is_tun is `true` for a TUN device (expects IP datagrams), or `false` for a TAP device (expects Ethernet frames)
@@ -34,3 +39,12 @@ TunTapFD::TunTapFD(const string &devname, const bool is_tun)
 
     SystemCall("ioctl", ioctl(fd_num(), TUNSETIFF, static_cast<void *>(&tun_req)));
 }
+#else
+namespace {
+int unsupported_tuntap_fd() {
+    throw runtime_error("Linux TUN/TAP devices are not supported on this platform");
+}
+}
+
+TunTapFD::TunTapFD(const string &, const bool) : FileDescriptor(unsupported_tuntap_fd()) {}
+#endif

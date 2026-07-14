@@ -19,11 +19,10 @@ using namespace std;
 //! \param[in] fixed_isn the Initial Sequence Number to use, if set (otherwise uses a random ISN)
 TCPSender::TCPSender(const size_t capacity, const uint16_t retx_timeout, const std::optional<WrappingInt32> fixed_isn)
     : _isn(fixed_isn.value_or(WrappingInt32{random_device()()}))
-    , _initial_retransmission_timeout{retx_timeout}
     , _stream(capacity)
     , tcptimer(retx_timeout, retx_timeout) {}
 
-uint64_t TCPSender::bytes_in_flight() const {
+size_t TCPSender::bytes_in_flight() const {
     return _bytes_in_flight;
 }
 
@@ -47,8 +46,7 @@ void TCPSender::fill_window() {
     // fin
     if (!_flag_fin && stream_in().eof() && in_flight < window &&
         stream_in().buffer_empty())
-
-    send_noempty_segment(window - in_flight);
+        send_noempty_segment(window - in_flight);
 }
 
 //! \param ackno The remote receiver's ackno (acknowledgment number)

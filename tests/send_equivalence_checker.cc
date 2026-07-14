@@ -6,6 +6,7 @@
 #include <exception>
 #include <iostream>
 #include <sstream>
+#include <utility>
 
 using namespace std;
 
@@ -33,7 +34,7 @@ void SendEquivalenceChecker::submit_a(TCPSegment &seg) {
     } else {
         TCPSegment cp;
         cp.parse(seg.serialize());
-        as.emplace_back(move(cp));
+        as.emplace_back(std::move(cp));
     }
 }
 
@@ -44,7 +45,7 @@ void SendEquivalenceChecker::submit_b(TCPSegment &seg) {
     } else {
         TCPSegment cp;
         cp.parse(seg.serialize());
-        bs.emplace_back(move(cp));
+        bs.emplace_back(std::move(cp));
     }
 }
 

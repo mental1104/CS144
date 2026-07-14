@@ -63,6 +63,9 @@ class TCPConnection {
     //! Update the connection liveness after state changes or time passage.
     void update_active();
 
+    template <typename Data>
+    size_t write_impl(Data &&data);
+
   public:
     //! \name "Input" interface for the writer
     //!@{

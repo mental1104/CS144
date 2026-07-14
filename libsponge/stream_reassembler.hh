@@ -8,9 +8,9 @@
 #include <set>
 
 struct TypeUnassembled {
-    size_t index;
+    uint64_t index;
     std::string data;
-    TypeUnassembled(size_t _index, std::string _data) : index(_index), data(_data) {}
+    TypeUnassembled(uint64_t _index, std::string _data) : index(_index), data(_data) {}
     bool operator<(const TypeUnassembled &t1) const { return index < t1.index; }
 };
 
@@ -22,14 +22,13 @@ class StreamReassembler {
     size_t merge_substring(std::string& data, uint64_t &index, std::set<TypeUnassembled>::iterator iter);
 
     std::set<TypeUnassembled> _Unassembled{};
-    size_t _firstUnassembled{0};
+    uint64_t _firstUnassembled{0};
     size_t _nUnassembled{0};
 
     bool _eof{false};
-    size_t _eof_index{0};
+    uint64_t _eof_index{0};
 
     ByteStream _output;  //!< The reassembled in-order byte stream
-    size_t _capacity;    //!< The maximum number of bytes
 
   public:
     //! \brief Construct a `StreamReassembler` that will store up to `capacity` bytes.

@@ -12,13 +12,13 @@ void DUMMY_CODE(Targs &&... /* unused */) {}
 
 using namespace std;
 
-StreamReassembler::StreamReassembler(const size_t capacity) : _output(capacity), _capacity(capacity) {}
+StreamReassembler::StreamReassembler(const size_t capacity) : _output(capacity) {}
 
 size_t
 StreamReassembler::merge_substring(std::string& data, uint64_t &index, std::set<TypeUnassembled>::iterator iter){
     string s = iter->data;
-    size_t l1 = index, r1 = index + data.size()-1;
-    size_t l2 = iter->index, r2 = l2 + iter->data.size()-1;
+    uint64_t l1 = index, r1 = index + data.size()-1;
+    uint64_t l2 = iter->index, r2 = l2 + iter->data.size()-1;
     if(l2 > r1 + 1 || l1 > r2 + 1)//第二个左大于第一个右，代表分离，无法合并。
         return 0;
     index = min(l1, l2);
@@ -39,9 +39,9 @@ StreamReassembler::merge_substring(std::string& data, uint64_t &index, std::set<
 //! \details This function accepts a substring (aka a segment) of bytes,
 //! possibly out-of-order, from the logical stream, and assembles any newly
 //! contiguous substrings and writes them into the output stream in order.
-void StreamReassembler::push_substring(const string &data, const size_t index, const bool eof) {
-    size_t firstUnacceptable = _firstUnassembled + _output.remaining_capacity();
-    const size_t eof_index = index + data.size();
+void StreamReassembler::push_substring(const string &data, const uint64_t index, const bool eof) {
+    uint64_t firstUnacceptable = _firstUnassembled + _output.remaining_capacity();
+    const uint64_t eof_index = index + data.size();
 
     if(eof && eof_index <= firstUnacceptable){
         _eof = true;
@@ -55,7 +55,7 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
     }
 
     std::set<TypeUnassembled>::iterator iter;
-    size_t resIndex = index;
+    uint64_t resIndex = index;
     string resData = std::string(data);
 
     if (resIndex < _firstUnassembled) {//数据大小超过了head_index

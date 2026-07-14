@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <stdexcept>
+#include <utility>
 #include <unistd.h>
 
 using namespace std;
@@ -17,16 +18,20 @@ Socket::Socket(const int domain, const int type) : FileDescriptor(SystemCall("so
 //! \param[in] fd is the FileDescriptor from which to construct
 //! \param[in] domain is `fd`'s domain; throws std::runtime_error if wrong value is supplied
 //! \param[in] type is `fd`'s type; throws std::runtime_error if wrong value is supplied
-Socket::Socket(FileDescriptor &&fd, const int domain, const int type) : FileDescriptor(move(fd)) {
+Socket::Socket(FileDescriptor &&fd, const int domain, const int type) : FileDescriptor(std::move(fd)) {
     int actual_value;
     socklen_t len;
 
+#ifdef SO_DOMAIN
     // verify domain
     len = sizeof(actual_value);
     SystemCall("getsockopt", getsockopt(fd_num(), SOL_SOCKET, SO_DOMAIN, &actual_value, &len));
     if ((len != sizeof(actual_value)) or (actual_value != domain)) {
         throw runtime_error("socket domain mismatch");
     }
+#else
+    static_cast<void>(domain);
+#endif
 
     // verify type
     len = sizeof(actual_value);

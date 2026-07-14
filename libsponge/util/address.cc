@@ -9,6 +9,7 @@
 #include <netdb.h>
 #include <stdexcept>
 #include <system_error>
+#include <utility>
 
 using namespace std;
 
@@ -60,7 +61,7 @@ Address::Address(const string &node, const string &service, const addrinfo &hint
 
     // put resolved_address in a wrapper so it will get freed if we have to throw an exception
     auto addrinfo_deleter = [](addrinfo *const x) { freeaddrinfo(x); };
-    unique_ptr<addrinfo, decltype(addrinfo_deleter)> wrapped_address(resolved_address, move(addrinfo_deleter));
+    unique_ptr<addrinfo, decltype(addrinfo_deleter)> wrapped_address(resolved_address, std::move(addrinfo_deleter));
 
     // assign to our private members (making sure size fits)
     *this = Address(wrapped_address->ai_addr, wrapped_address->ai_addrlen);
@@ -114,13 +115,13 @@ uint32_t Address::ipv4_numeric() const {
     sockaddr_in ipv4_addr{};
     memcpy(&ipv4_addr, &_address.storage, _size);
 
-    return be32toh(ipv4_addr.sin_addr.s_addr);
+    return ntohl(ipv4_addr.sin_addr.s_addr);
 }
 
 Address Address::from_ipv4_numeric(const uint32_t ip_address) {
     sockaddr_in ipv4_addr{};
     ipv4_addr.sin_family = AF_INET;
-    ipv4_addr.sin_addr.s_addr = htobe32(ip_address);
+    ipv4_addr.sin_addr.s_addr = htonl(ip_address);
 
     return {reinterpret_cast<sockaddr *>(&ipv4_addr), sizeof(ipv4_addr)};
 }
