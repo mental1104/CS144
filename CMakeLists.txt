@@ -7,7 +7,6 @@ include (etc/build_type.cmake)
 include (etc/cflags.cmake)
 
 include (etc/doxygen.cmake)
-
 include (etc/clang_format.cmake)
 include (etc/clang_tidy.cmake)
 include (etc/cppcheck.cmake)
@@ -27,3 +26,4 @@ add_subdirectory ("${PROJECT_SOURCE_DIR}/doctests")
 
 include (etc/tests.cmake)
 include (etc/http_tests.cmake)
+include (etc/congestion_control_tests.cmake)
