@@ -30,7 +30,19 @@ jobs:
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 
       - name: Build
-        run: cmake --build build --parallel 2
+        run: |
+          set +e
+          cmake --build build --parallel 2 > build.log 2>&1
+          status=$?
+          tail -n 120 build.log
+          exit "$status"
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
 
       - name: Run unit and local FSM tests
         run: |
