@@ -5,7 +5,7 @@
 #include "wrapping_integers.hh"
 
 #include <cstddef>
-#include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <string>
 #include <utility>
@@ -30,7 +30,8 @@ std::size_t transfer(TCPConnection &from, TCPConnection &to) {
 
 std::string run_request(const std::vector<std::string> &application_chunks) {
     const std::string root = "/tmp/cs144-http-e2e-static";
-    std::system(("rm -rf " + root + " && mkdir -p " + root).c_str());
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
     {
         std::ofstream output{root + "/hello.txt", std::ios::binary};
         output << "Hello through TCPConnection!\n";
@@ -89,7 +90,7 @@ std::string run_request(const std::vector<std::string> &application_chunks) {
         server_http.poll();
 
         if (client_closed_output && !client.active() && !server.active()) {
-            std::system(("rm -rf " + root).c_str());
+            std::filesystem::remove_all(root);
             return response;
         }
 
@@ -98,7 +99,7 @@ std::string run_request(const std::vector<std::string> &application_chunks) {
         }
     }
 
-    std::system(("rm -rf " + root).c_str());
+    std::filesystem::remove_all(root);
     require_http(false, "TCPConnection pair did not reach clean shutdown");
     return {};
 }
