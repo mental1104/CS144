@@ -14,6 +14,7 @@ include (etc/cppcheck.cmake)
 
 include_directories ("${PROJECT_SOURCE_DIR}/libsponge/util")
 include_directories ("${PROJECT_SOURCE_DIR}/libsponge/tcp_helpers")
+include_directories ("${PROJECT_SOURCE_DIR}/libsponge/http")
 include_directories ("${PROJECT_SOURCE_DIR}/libsponge")
 
 add_subdirectory ("${PROJECT_SOURCE_DIR}/libsponge")
@@ -25,3 +26,4 @@ add_subdirectory ("${PROJECT_SOURCE_DIR}/tests")
 add_subdirectory ("${PROJECT_SOURCE_DIR}/doctests")
 
 include (etc/tests.cmake)
+include (etc/http_tests.cmake)
