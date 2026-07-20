@@ -37,4 +37,4 @@ jobs:
           ctest --test-dir build \
             --output-on-failure \
             --timeout 20 \
-            -R '^(t_byte_stream_|t_strm_reassem_|t_wrapping_ints_|t_recv_|t_send_|t_active_close$|t_passive_close$|t_ack_rst$|t_ack_rst_win$|t_connect$|t_listen$|t_winsize$|t_retx$|t_retx_win$|t_loopback$|t_loopback_win$|t_reorder$|t_address_dt$|t_parser_dt$|t_socket_dt$)'
+            -R '^(t_byte_stream_|t_strm_reassem_|t_wrapping_ints_|t_recv_|t_send_|t_active_close$|t_passive_close$|t_ack_rst$|t_ack_rst_win$|t_connect$|t_listen$|t_winsize$|t_retx$|t_retx_win$|t_loopback$|t_loopback_win$|t_reorder$|t_address_dt$|t_parser_dt$|t_socket_dt$|t_udp_connection$)'

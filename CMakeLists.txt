@@ -27,3 +27,4 @@ add_subdirectory ("${PROJECT_SOURCE_DIR}/doctests")
 
 include (etc/tests.cmake)
 include (etc/http_tests.cmake)
+include (etc/udp_tests.cmake)
