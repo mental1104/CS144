@@ -1,7 +1,7 @@
 #include "static_file_handler.hh"
 #include "http_test_support.hh"
 
-#include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <string>
 
@@ -23,7 +23,8 @@ HttpRequest request_for(const std::string &method, const std::string &target) {
 
 int main() {
     const std::string root = "/tmp/cs144-http-static-test";
-    std::system(("rm -rf " + root + " && mkdir -p " + root).c_str());
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
     {
         std::ofstream output{root + "/index.html", std::ios::binary};
         output << "<h1>Hello</h1>\n";
@@ -46,6 +47,6 @@ int main() {
     const auto traversal = handler.handle(request_for("GET", "/../secret"));
     require_http(traversal.status == 400, "path traversal should return 400");
 
-    std::system(("rm -rf " + root).c_str());
+    std::filesystem::remove_all(root);
     return 0;
 }
